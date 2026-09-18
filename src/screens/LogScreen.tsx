@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { activityNames, dayLabels } from '../data/constants';
 import { FlameIcon, PlusIcon } from '../components/icons';
-import CelebrationOverlay from '../components/CelebrationOverlay';
+import StreakCelebration from '../components/StreakCelebration';
 import { useAuth } from '../context/AuthContext';
 import { useCrewLogsContext } from '../context/CrewLogsContext';
 import { aggregateMembers } from '../utils/aggregate';
@@ -19,6 +19,8 @@ export default function LogScreen() {
   const [activity, setActivity] = useState(activityNames[0]);
   const [logging, setLogging] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
+  const [celebrationStreak, setCelebrationStreak] = useState(0);
+  const justLoggedRef = useRef(false);
 
   const myStats = useMemo(() => {
     const stats = aggregateMembers(roster, logs);
@@ -30,6 +32,16 @@ export default function LogScreen() {
   const totalCount = myStats?.allCount ?? 0;
   const dayKeys = myStats?.dayKeys ?? new Set<string>();
 
+  // logIt's own closure captures a stale `streak` from the render it was called
+  // in, so the fresh post-log value is picked up here once the next render
+  // (triggered by the optimistic log update) actually has it.
+  useEffect(() => {
+    if (!justLoggedRef.current) return;
+    justLoggedRef.current = false;
+    setCelebrationStreak(streak);
+    setCelebrating(true);
+  }, [streak]);
+
   const doneMask = useMemo(() => {
     const today = new Date();
     const mondayOffset = today.getDay() === 0 ? -6 : 1 - today.getDay();
@@ -40,9 +52,12 @@ export default function LogScreen() {
   const logIt = async () => {
     if (loggedToday || logging) return;
     setLogging(true);
+    // logActivity updates `logs` optimistically before the network call resolves,
+    // so the flag has to be set before awaiting it, not after.
+    justLoggedRef.current = true;
     const error = await logActivity(activity);
     setLogging(false);
-    if (!error) setCelebrating(true);
+    if (error) justLoggedRef.current = false;
   };
 
   return (
@@ -89,7 +104,6 @@ export default function LogScreen() {
         <Text style={[styles.hint, { color: loggedToday ? colors.accent : colors.textMuted }]}>
           {loggedToday ? 'Logged for today — nice work' : "Tap to log today's session"}
         </Text>
-        <CelebrationOverlay visible={celebrating} onDone={() => setCelebrating(false)} />
       </View>
 
       <View style={styles.statsRow}>
@@ -124,6 +138,12 @@ export default function LogScreen() {
           </View>
         ))}
       </View>
+
+      <StreakCelebration
+        visible={celebrating}
+        streak={celebrationStreak}
+        onDone={() => setCelebrating(false)}
+      />
     </SafeAreaView>
   );
 }
