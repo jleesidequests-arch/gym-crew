@@ -5,6 +5,7 @@ import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { activityNames, dayLabels } from '../data/constants';
 import { FlameIcon, PlusIcon } from '../components/icons';
+import CelebrationOverlay from '../components/CelebrationOverlay';
 import { useAuth } from '../context/AuthContext';
 import { useCrewLogsContext } from '../context/CrewLogsContext';
 import { aggregateMembers } from '../utils/aggregate';
@@ -17,6 +18,7 @@ export default function LogScreen() {
 
   const [activity, setActivity] = useState(activityNames[0]);
   const [logging, setLogging] = useState(false);
+  const [celebrating, setCelebrating] = useState(false);
 
   const myStats = useMemo(() => {
     const stats = aggregateMembers(roster, logs);
@@ -38,8 +40,9 @@ export default function LogScreen() {
   const logIt = async () => {
     if (loggedToday || logging) return;
     setLogging(true);
-    await logActivity(activity);
+    const error = await logActivity(activity);
     setLogging(false);
+    if (!error) setCelebrating(true);
   };
 
   return (
@@ -86,6 +89,7 @@ export default function LogScreen() {
         <Text style={[styles.hint, { color: loggedToday ? colors.accent : colors.textMuted }]}>
           {loggedToday ? 'Logged for today — nice work' : "Tap to log today's session"}
         </Text>
+        <CelebrationOverlay visible={celebrating} onDone={() => setCelebrating(false)} />
       </View>
 
       <View style={styles.statsRow}>
